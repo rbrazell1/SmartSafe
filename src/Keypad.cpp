@@ -27,7 +27,7 @@ const int SERVO_TRAP_DOOR_PIN = 23;
 const int SERVO_VAULT_DOOR_PIN = 23;
 const int UNLOCKED = 0;
 const int LOCKED = 180;
-const int stepsPerRevolution = 2048;
+const int STEPS_PER_REV = 2048;
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -67,27 +67,22 @@ Stepper CandyStepper(stepsPerRevolution, 8, 9, 10, 11);
 
 void setup() {
     Serial.begin(9600);
-    Serial.printf("Push a button on the key pad\n");
-    basicServo.attach(SERVO_PIN);
+    display.println("Serial Com established...");
+    EthernetStatus = Ethernet.begin(mac);
+    if (!EthernetStatus) {
+        display.printf("failed to configure Ethernet using DHCP \n");
+        //no point in continuing
+    }
+    display.printf("Push a button on the key pad\n");
+    trapDoorServo.attach(SERVO_TRAP_DOOR_PIN);
+    vaultDoorServo.attach(SERVO_VAULT_DOOR_PIN);
     codeIndex = 0;
     digitsCorrect = 0;
-    pinMode(PIN_GLED, OUTPUT);
-    pinMode(PIN_RLED, OUTPUT);
     pinMode(10, OUTPUT);
     pinMode(4, OUTPUT);
     digitalWrite(10, HIGH);
     digitalWrite(4, HIGH);
-    redButton.attachClick(turnOffDelayed);
-    greenButton.attachClick(nextOutlet);
-    Serial.begin(9600);
-    while (!Serial);
-    Serial.println("Serial Com established...");
-    status = Ethernet.begin(mac);
-    if (!status) {
-        Serial.printf("failed to configure Ethernet using DHCP \n");
-        //no point in continuing
-        while (1);
-    }
+
     //print your local IP address
     Serial.print("My IP address:");
     for (byte thisByte = 0; thisByte < 4; thisByte++) {
