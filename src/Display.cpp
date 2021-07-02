@@ -37,8 +37,8 @@ void setUpOLED() {
     resetCursor();
 }
 
-void loop() {
-    timer.startTimer(9000);
+void OLEDLoop() {
+    OLEDtimer.startTimer(1000);
     if (Serial.available()) {
         time_t t = processSyncMessage();
         if (t != 0) {
@@ -46,7 +46,7 @@ void loop() {
             setTime(t);
         }
     }
-    while (!timer.isTimerReady());
+    while (!OLEDtimer.isTimerReady());
     OLED.clearDisplay();
     currentHour = hour();
     currentMin = minute();
@@ -90,9 +90,6 @@ unsigned long processSyncMessage() {
     if (Serial.find(TIME_HEADER)) {
         pctime = Serial.parseInt();
         return pctime;
-        if ( pctime < DEFAULT_TIME) { // check the value is a valid time (greater than Jan 1 2013)
-            pctime = 0L; // return 0 to indicate that the time is not valid
-        }
     }
     return pctime;
 }

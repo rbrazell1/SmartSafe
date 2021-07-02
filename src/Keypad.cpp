@@ -5,12 +5,6 @@
 #ifndef SMARTSAFE_KEYPAD_H
 #define SMARTSAFE_KEYPAD_H
 
-/*
-   Project: Servo lock
-   Description: Code to move a unlock a bolt lock with key pad and servo
-   Aurthor: Russell Brazell
-   Date: 6-22-2021
-*/
 
 #include <math.h>
 #include <PWMServo.h>
@@ -24,10 +18,14 @@
 #include "Display.cpp"
 
 const int SERVO_TRAP_DOOR_PIN = 23;
-const int SERVO_VAULT_DOOR_PIN = 23;
+const int SERVO_VAULT_DOOR_PIN = 22;
 const int UNLOCKED = 0;
 const int LOCKED = 180;
 const int STEPS_PER_REV = 2048;
+const int STEPPER_ONE = 14;
+const int STEPPER_TWO = 15;
+const int STEPPER_THREE = 16;
+const int STEPPER_FOUR = 17;
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -63,7 +61,7 @@ Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS)
 EthernetClient client;
 IOTTimer timer;
 Wemo wemo;
-Stepper CandyStepper(stepsPerRevolution, 8, 9, 10, 11);
+Stepper CandyStepper(stepsPerRevolution, STEPPER_ONE, STEPPER_TWO, STEPPER_THREE, STEPPER_FOUR);
 
 void setUpKeypad() {
     display.println("Serial Com established...");

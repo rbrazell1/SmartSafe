@@ -9,10 +9,11 @@
 
 
 void setup() {
+setUpOLED();
 
 }
 
 void loop() {
-
+OLEDLoop();
 }
 
