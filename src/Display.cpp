@@ -74,8 +74,8 @@ time_t getTeensy3Time() {
 
 void pickCandy() {
     OLED.clearDisplay();
-    OLED.printf("Pick Your\nCandy");
     OLED.setTextSize(2);
+    OLED.printf("Pick Your\nCandy");
     OLED.display();
 }
 

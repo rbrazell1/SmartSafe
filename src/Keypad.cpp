@@ -133,7 +133,7 @@ void locking() {
 
 void unlocking() {
    vaultDoorServo.write(UNLOCKED);
-   pickCandy();
+   Diplay.pickCandy();
    Serial.readIn("");
 }
 
