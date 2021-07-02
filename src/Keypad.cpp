@@ -65,15 +65,13 @@ IOTTimer timer;
 Wemo wemo;
 Stepper CandyStepper(stepsPerRevolution, 8, 9, 10, 11);
 
-void setup() {
-    Serial.begin(9600);
+void setUpKeypad() {
     display.println("Serial Com established...");
     EthernetStatus = Ethernet.begin(mac);
     if (!EthernetStatus) {
         display.printf("failed to configure Ethernet using DHCP \n");
         //no point in continuing
     }
-    display.printf("Push a button on the key pad\n");
     trapDoorServo.attach(SERVO_TRAP_DOOR_PIN);
     vaultDoorServo.attach(SERVO_VAULT_DOOR_PIN);
     codeIndex = 0;
@@ -82,14 +80,6 @@ void setup() {
     pinMode(4, OUTPUT);
     digitalWrite(10, HIGH);
     digitalWrite(4, HIGH);
-
-    //print your local IP address
-    Serial.print("My IP address:");
-    for (byte thisByte = 0; thisByte < 4; thisByte++) {
-        Serial.print(Ethernet.localIP()[thisByte], DEC);
-        if (thisByte < 3) Serial.print(".");
-    }
-    Serial.println();
     outlet = 0;
 }
 
@@ -104,6 +94,7 @@ void loop() {
 }
 
 void enterCode() {
+    display.printf("Enter your code\n");
     enteredCode[codeIndex] = customKey;
     codeIndex < 4 ? codeIndex++ : codeIndex = 3;
 }
@@ -120,7 +111,7 @@ void checkCode() {
 
     codeIndex = 0;
     if (digitsCorrect >= 4) {
-        moveBolt();
+        openDoor();
     }
     digitsCorrect = 0;
 }
@@ -143,6 +134,7 @@ void locking() {
 void unlocking() {
    vaultDoorServo.write(UNLOCKED);
    pickCandy();
+   Serial.readIn("");
 }
 
 void nextOutlet() {

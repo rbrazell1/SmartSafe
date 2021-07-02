@@ -1,16 +1,3 @@
-//
-// Created by Russell on 7/1/2021.
-//
-
-#ifndef SMARTSAFE_DISPLAY_H
-#define SMARTSAFE_DISPLAY_H
-
-/*
-   Project: I2C scanner
-   Description: Code to find I2C devices
-   Author: Russell Brazell
-   Date: 6-22-2021
-*/
 
 #include <SPI.h>
 #include <Wire.h>
@@ -33,22 +20,20 @@ int currentYear = year();
 byte i;
 byte count;
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-IOTTimer timer;
+Adafruit_SSD1306 OLED(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+IOTTimer OLEDtimer;
 
-void setup() {
+void setUpOLED() {
     Serial.begin(11520);
-    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-    if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    if (!OLED.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
-        for (;;); // Don't proceed, loop forever
     }
     setSyncProvider(getTeensy3Time);
-    display.clearDisplay();
+    OLED.clearDisplay();
     Wire.begin();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setRotation(0);
+    OLED.setTextSize(1);
+    OLED.setTextColor(SSD1306_WHITE);
+    OLED.setRotation(0);
     resetCursor();
 }
 
@@ -62,7 +47,7 @@ void loop() {
         }
     }
     while (!timer.isTimerReady());
-    display.clearDisplay();
+    OLED.clearDisplay();
     currentHour = hour();
     currentMin = minute();
     currentDay = day();
@@ -73,14 +58,14 @@ void loop() {
 }
 
 void resetCursor() {
-    display.setCursor(0, 0);
+    OLED.setCursor(0, 0);
 }
 
 void digitalClockDisplay() {
     // digital clock display of the time
-    display.printf("%02i:%02i\n%02i-%02i-%04i\n",
+    OLED.printf("%02i:%02i\n%02i-%02i-%04i\n",
                    currentHour, currentMin, currentMnth, currentDay, currentYear);
-    display.display();
+    OLED.display();
 }
 
 time_t getTeensy3Time() {
@@ -88,10 +73,10 @@ time_t getTeensy3Time() {
 }
 
 void pickCandy() {
-    display.clearDisplay();
-    display.printf("Choose\nWisely");
-    display.setTextSize(3);
-    display.display();
+    OLED.clearDisplay();
+    OLED.printf("Pick Your\nCandy");
+    OLED.setTextSize(2);
+    OLED.display();
 }
 
 /*  code to process time sync messages from the serial port   */
@@ -111,5 +96,3 @@ unsigned long processSyncMessage() {
     }
     return pctime;
 }
-
-#endif //SMARTSAFE_DISPLAY_H
