@@ -26,6 +26,8 @@ const int SERVO_TRAP_DOOR_PIN = 23;
 const int SERVO_VAULT_DOOR_PIN = 22;
 const int TRIG_PIN = 21;
 const int ECHO_PIN = 20;
+const int IC_CLK_PIN = 19;
+const int IC_DIO_PIN = 18;
 const int STEPPER_ONE_PIN = 14;
 const int STEPPER_TWO_PIN = 15;
 const int STEPPER_THREE_PIN = 16;
@@ -49,6 +51,7 @@ int codeIndex;
 int rotation;
 int digitsCorrect;
 int stepCount;
+int attempt;
 
 static int outlet;
 
@@ -92,21 +95,23 @@ Stepper CandyStepper(stepsPerRevolution,
                      STEPPER_TWO_PIN,
                      STEPPER_THREE_PIN,
                      STEPPER_FOUR_PIN);
+TM1637 fourDigDisplay(IC_CLK_PIN, IC_DIO_PIN);
 
 
 void setup() {
   setUpOLED();
   setUpUSSensor();
   setUpKeypad();
+  setUpFourDigDisplay();
 }
 
 void loop() {
+  checkKeypad();
   if (isDetect) {
     welcome();
   } else {
     OLEDLoop();
   }
-  checkKeypad();
 }
 
 void setUpOLED() {
@@ -198,17 +203,17 @@ float getDistance() {
 }
 
 void checkKeypad() {
+  firstDig = random(0, 9);
+  secondDig = random(0, 9);
+  thirdDig = random(0, 9);
+  forthDig = random(0, 9);
   customKey = customKeypad.getKey();
   if (customKey) {
     if (customKey == '*') {
-bulbSelect = customKeypad.getKey();
-      while (!bulbSelect);
-      switch (bulbSelect) {
-        case 'A':
-//          TODO turn off 1 bulb
-          break;
-
+      while (!bulbSelect) {
+        bulbSelect = customKeypad.getKey();
       }
+      selectBuld(bulbSelect);
     } else {
       enterCode();
       if (codeIndex == 4) {
@@ -234,6 +239,9 @@ void checkCode() {
   codeIndex = 0;
   if (digitsCorrect >= 4) {
     openDoor();
+  } else {
+    setHue(attempt, true, HueRed, 210, 220);
+    attempt++;
   }
   digitsCorrect = 0;
 }
@@ -245,7 +253,6 @@ void openDoor() {
     unlocking();
   }
   lock = !lock;
-  digitsCorrect = 0;
 }
 
 void locking() {
@@ -255,8 +262,7 @@ void locking() {
 
 void unlocking() {
   vaultDoorServo.write(UNLOCKED);
-  Diplay.pickCandy();
-  Serial.readIn("");
+  pickCandy();
 }
 
 void nextOutlet() {
@@ -272,6 +278,7 @@ void pickCandy() {
   OLED.setTextSize(2);
   OLED.printf("Pick Your\nCandy");
   OLED.display();
+  rotateCandy();
 }
 
 void lightLaser() {
