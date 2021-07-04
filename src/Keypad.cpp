@@ -23,10 +23,10 @@ const int SERVO_TRAP_DOOR_PIN = 23;
 const int SERVO_VAULT_DOOR_PIN = 22;
 const int IC_CLK_PIN = 19;
 const int IC_DIO_PIN = 18;
-const int STEPPER_ONE_PIN = 14;
-const int STEPPER_TWO_PIN = 15;
-const int STEPPER_THREE_PIN = 16;
 const int STEPPER_FOUR_PIN = 17;
+const int STEPPER_THREE_PIN = 16;
+const int STEPPER_TWO_PIN = 15;
+const int STEPPER_ONE_PIN = 14;
 const int LASER_PIN = 0;
 const PHOTO_RES_PIN = A14;
 
@@ -139,9 +139,11 @@ void enterCode() {
 void checkCode() {
   for (int i = 0; i < codeIndex; i++) {
     isLocked = enteredCode[i] == defaultCode[i];
-    isLocked == true
-    ? digitsCorrect++
-    : digitsCorrect = 0;
+    if (isLocked == true) {
+      digitsCorrect++;
+    } else {
+      digitsCorrect = 0;
+    }
   }
 
   codeIndex = 0;
@@ -297,7 +299,7 @@ void showCandySelection() {
   OLED.display();
 }
 
-bool checkBeam() {
+void checkBeam() {
   beamRead = analogRead(PHOTO_RES_PIN);
   while (beamRead > BEAM_BROKEN);
 }
