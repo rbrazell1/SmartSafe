@@ -3,7 +3,6 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <IOTTimer.h>
 #include <TimeLib.h>
 #include <math.h>
 #include <PWMServo.h>
@@ -78,10 +77,10 @@ char bulbSelect;
 char defaultCode[] = {'1', '1', '1', '1'};
 char enteredCode[4];
 char hexaKeys[ROWS][COLS] = {
-    {'1', '2', '3', 'A'},
-    {'4', '5', '6', 'B'},
-    {'7', '8', '9', 'C'},
-    {'*', '0', '#', 'D'}
+  {'1', '2', '3', 'A'},
+  {'4', '5', '6', 'B'},
+  {'7', '8', '9', 'C'},
+  {'*', '0', '#', 'D'}
 };
 
 byte i;
@@ -101,7 +100,7 @@ IOTTimer trapDoorTimer;
 PWMServo trapDoorServo;
 PWMServo vaultDoorServo;
 Keypad
-    customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
+customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 
 EthernetClient client;
 Wemo wemo;
@@ -113,29 +112,44 @@ Stepper candyStepper(STEPS_PER_REV,
 TM1637 fourDigDisplay(IC_CLK_PIN, IC_DIO_PIN);
 
 void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+  Serial.println("step1");
   setUpOLED();
+  Serial.println("step2");
   setUpUSSensor();
+  Serial.println("step3");
   setUpKeypad();
+  Serial.println("step4");
   setUpFourDigDisplay();
+  Serial.println("step5");
 }
 
 void loop() {
+  Serial.println("step1A");
   checkKeypad();
+  Serial.println("step2A");
   if (isDetect()) {
+    Serial.println("step3A");
     welcome();
+    Serial.println("step4A");
   } else {
+    Serial.println("step5A");
     OLEDLoop();
+    Serial.println("step6A");
   }
+  delay(3000);
 }
 
 void setUpOLED() {
-  Serial.begin(11520);
+  Wire.begin();
+  OLED.begin();
   if (!OLED.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
   }
   setSyncProvider(getTeensy3Time);
   OLED.clearDisplay();
-  Wire.begin();
+  OLED.display();
   OLED.setTextSize(1);
   OLED.setTextColor(SSD1306_WHITE);
   OLED.setRotation(0);
@@ -195,7 +209,7 @@ void checkKeypad() {
 void welcome() {
   OLED.clearDisplay();
   OLED.printf(
-      "Welcome to the SmartSafe\nEnter your code\nOr\nSet the lights with *\n&\nA - D");
+    "Welcome to the SmartSafe\nEnter your code\nOr\nSet the lights with *\n&\nA - D");
   OLED.display();
   setToGreen(3);
   lightLaser();
@@ -213,6 +227,7 @@ void OLEDLoop() {
   }
   while (!OLEDtimer.isTimerReady());
   OLED.clearDisplay();
+  OLED.display();
   currentHour = hour();
   currentMin = minute();
   currentDay = day();
@@ -220,6 +235,7 @@ void OLEDLoop() {
   currentYear = year();
   resetCursor();
   digitalClockDisplay();
+  Serial.println("in OLED loop");
 }
 
 void setToGreen(int bulbCount) {
@@ -234,11 +250,13 @@ void lightLaser() {
 }
 
 float getDistance() {
+  digitalWrite(ECHO_PIN, LOW);
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
   echoTime = pulseIn(ECHO_PIN, HIGH, 250L);
   return calculatedDistance = (echoTime / 148.0);
+  Serial.printf("Reading for calDis%f", calculatedDistance);
 }
 
 bool isDetect() {
@@ -374,6 +392,7 @@ void resetCursor() {
 
 void digitalClockDisplay() {
   // digital clock display of the time
+  OLED.setTextSize(5);
   OLED.printf("%02i:%02i\n%02i-%02i-%04i\n",
               currentHour, currentMin, currentMnth, currentDay, currentYear);
   OLED.display();
