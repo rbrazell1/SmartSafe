@@ -1,8 +1,8 @@
-#include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_MPU6050.h>
 #include <TimeLib.h>
 #include <math.h>
 #include <PWMServo.h>
@@ -43,8 +43,9 @@ const int STEPS_PER_REV = 2048;
 const int STEPPER_SPEED = 5;
 const int TOTAL_SLOTS = 7;
 const int BEAM_BROKEN = 210;
-const int CODE_LENGTH = 2;
+const int CODE_LENGTH = 4;
 const int DETECT_DIST = 40;
+const int HUE_COUNT = 5;
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -69,6 +70,9 @@ int bulb;
 int brightnessLevel;
 int candySlot;
 int mappedCandySlot;
+int lastSlot;
+int currentSlot;
+int finalSlot;
 int beamRead;
 int distance;
 
@@ -77,9 +81,10 @@ unsigned long echoTime;
 char customKey;
 char candySelection;
 char bulbSelect;
+char wemoSelect;
 
-char defaultCode[] = {'1', '1'};
-char enteredCode[CODE_LENGTH - 1];
+char defaultCode[] = {'1', '1', '1', '1'};
+char enteredCode[CODE_LENGTH];
 char hexaKeys[ROWS][COLS] = {
   {'1', '2', '3', 'A'},
   {'4', '5', '6', 'B'},
@@ -90,15 +95,16 @@ char hexaKeys[ROWS][COLS] = {
 byte i;
 byte count;
 
-byte rowPins[ROWS] = {9, 8, 7, 6}; // keypad leads 8 , 7 , 6 , 5
-byte colPins[COLS] = {5, 4, 3, 2}; // keypad leads 4 , 3 , 2 , 1
+byte rowPins[ROWS] = {8, 7, 6, 5}; // keypad leads 8 , 7 , 6 , 5
+byte colPins[COLS] = {4, 3, 2, 1}; // keypad leads 4 , 3 , 2 , 1
 
 bool detected;
 bool EthernetStatus;
 bool isLocked;
 bool lock;
+bool welcomed;
 
-Adafruit_SSD1306 OLED(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 OLED(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 IOTTimer OLEDtimer;
 IOTTimer trapDoorTimer;
 PWMServo trapDoorServo;
@@ -117,26 +123,21 @@ HCSR04 ultraSonic(TRIG_PIN, ECHO_PIN);
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial);
-  Serial.println("step1");
+//  while (!Serial);
   setUpOLED();
-  Serial.println("step2");
-  //  setUpUSSensor();
-  Serial.println("step3");
   setUpKeypad();
-  Serial.println("step4");
   setUpFourDigDisplay();
-  Serial.println("step5");
+  Serial.println("Setup complete");
 }
 
 void loop() {
-  if (isDetect()) {
+  if (isDetect() && welcomed == false) {
     welcome();
     Serial.println("step1A");
+    welcomed = true;
   } else {
-    checkKeypad();
-    Serial.println("step2A");
     OLEDLoop();
+    checkKeypad();
   }
 }
 
@@ -153,12 +154,8 @@ void setUpOLED() {
   OLED.setTextColor(SSD1306_WHITE);
   OLED.setRotation(2);
   resetCursor();
+  welcomed = false;
 }
-//
-//void setUpUSSensor() {
-//  pinMode(TRIG_PIN, OUTPUT);
-//  pinMode(ECHO_PIN, INPUT);
-//}
 
 void setUpKeypad() {
   OLED.printf("Serial Com established...\n");
@@ -174,13 +171,14 @@ void setUpKeypad() {
   codeIndex = 0;
   digitsCorrect = 0;
   pinMode(10, OUTPUT);
-  pinMode(4, OUTPUT);
+  //  pinMode(4, OUTPUT);
   digitalWrite(10, HIGH);
-  digitalWrite(4, HIGH);
+  //  digitalWrite(4, HIGH);
   outlet = 0;
   OLED.clearDisplay();
   OLED.display();
   resetCursor();
+  setToGreen(HUE_COUNT);
 }
 
 void setUpFourDigDisplay() {
@@ -193,23 +191,27 @@ void checkKeypad() {
   secondDig = random(0, 9);
   thirdDig = random(0, 9);
   forthDig = random(0, 9);
-  customKey = customKeypad.getKey();
   Serial.printf("testBEFORE\n");
+  customKey = customKeypad.getKey();
   while (!customKey) {
     customKey = customKeypad.getKey(); //TODO add in set to green
   }
-  lightLaser();
   if (customKey == '*') {
     while (!bulbSelect) {
       bulbSelect = customKeypad.getKey();
     }
     selectBulb(bulbSelect);
     bulbSelect = 0x00;
-  } else {
-    enterCode();
-    if (codeIndex == CODE_LENGTH) {
-      checkCode();
+  } if (customKey == '#') {
+    while (!wemoSelect) {
+      wemoSelect = customKeypad.getKey();
     }
+    selectWemo(wemoSelect);
+    wemoSelect = 0x00;
+  } else
+    enterCode();
+  if (codeIndex == CODE_LENGTH) {
+    checkCode();
   }
 }
 
@@ -219,10 +221,9 @@ void welcome() {
   OLED.printf(
     "Welcome to the SmartSafe\nEnter your code\nOr\nSet the lights with *\n&\nA - D\n");
   OLED.display();
-  setToGreen(4);
+  setToGreen(HUE_COUNT);
   lightLaser();
   wemo.turnOn(0); // Light to see the candy better
-  checkKeypad();
 }
 
 void OLEDLoop() {
@@ -242,7 +243,7 @@ void OLEDLoop() {
   currentYear = year();
   resetCursor();
   digitalClockDisplay();
-  Serial.println("in OLED loop");
+  Serial.println("Finished OLED loop");
 }
 
 void setToGreen(int bulbCount) {
@@ -250,6 +251,7 @@ void setToGreen(int bulbCount) {
     brightnessLevel = (int) 127 * sin(2 * PI * .1 * now()) + 127;
     setHue(i, true, HueGreen, brightnessLevel, SAT);
   }
+  attempt = 1;
 }
 
 void lightLaser() {
@@ -272,37 +274,58 @@ bool isDetect() {
 void selectBulb(char bulb) {
   switch (bulb) {
     case 'A':
-      setHue(0, false, 0, 0, 0);
-      break;
-    case 'B':
       setHue(1, false, 0, 0, 0);
       break;
-    case 'C':
+    case 'B':
       setHue(2, false, 0, 0, 0);
       break;
-    case 'D':
+    case 'C':
       setHue(3, false, 0, 0, 0);
+      break;
+    case 'D':
+      setHue(4, false, 0, 0, 0);
+      break;
+    case '0':
+      setHue(5, false, 0, 0, 0);
+      break;
+  }
+}
+
+void selectWemo(char _wemo) {
+  switch (_wemo) {
+    case 'A':
+      wemo.turnOn(0);
+      break;
+    case 'B':
+      wemo.turnOn(1);
+      break;
+    case 'C':
+      wemo.turnOn(2);
+      break;
+    case 'D':
+      wemo.turnOn(3);
       break;
   }
 }
 
 void enterCode() {
   enteredCode[codeIndex] = customKey;
-  if (codeIndex < CODE_LENGTH) {
+  showFourDig(codeIndex);
+  if (codeIndex <= CODE_LENGTH) {
     codeIndex++;
   }
   Serial.printf("testCODEINDEX: %i\n", codeIndex);
 }
 
 void checkCode() {
-  for (int i = 0; i < codeIndex; i++) {
+  for (int i = 0; i < CODE_LENGTH; i++) {
     isLocked = enteredCode[i] == defaultCode[i];
     isLocked == true
     ? digitsCorrect++
     : digitsCorrect = 0;
   }
   codeIndex = 0;
-  if (digitsCorrect == CODE_LENGTH - 1) {
+  if (digitsCorrect == CODE_LENGTH) {
     openDoor();
   } else {
     setHue(attempt, true, HueRed, 210, 220);
@@ -312,16 +335,10 @@ void checkCode() {
 }
 
 void openDoor() {
-  lock = false;
-  if (lock == true) {
-    locking();
-    Serial.println("locking");
-  } else {
-    unlocking();
-    Serial.println("unlocking");
-  }
-  Serial.printf("Lock = %i\n", lock);
+  Serial.println("unlocking");
+  unlocking();
   digitsCorrect = 0;
+  locking();
 }
 
 void locking() {
@@ -337,7 +354,7 @@ void unlocking() {
   trapDoorTimer.startTimer(550);
   Serial.println("Waiting to close");
   while (!trapDoorTimer.isTimerReady());
-  locking();
+  setToGreen(HUE_COUNT);
 }
 
 void pickCandy() {
@@ -355,37 +372,40 @@ void rotateCandy() {
     candySelection = customKeypad.getKey();
   }
   candyStepper.setSpeed(STEPPER_SPEED);
+  Serial.println("Ready to move stepper");
   switch (candySelection) {
     case '1':
-      candySlot = 0;
-      break;
-    case '2':
       candySlot = 1;
       break;
-    case '3':
+    case '2':
       candySlot = 2;
       break;
-    case '4':
+    case '3':
       candySlot = 3;
       break;
-    case '5':
+    case '4':
       candySlot = 4;
       break;
-    case '6':
+    case '5':
       candySlot = 5;
       break;
-    case '7':
+    case '6':
       candySlot = 6;
       break;
-    case '8':
+    case '7':
       candySlot = 7;
+      break;
+    case '8':
+      candySlot = 8;
       break;
   }
   showCandySelection();
-  candyStepper.step(mappedCandySlot);
+  mappedCandySlot = map(candySlot, 0, TOTAL_SLOTS, 0, STEPS_PER_REV);
+  candyStepper.step(-mappedCandySlot);
 }
 
 void checkBeam() {
+  beamRead = analogRead(PHOTO_RES_PIN);
   Serial.printf("BEAM READ: %i\n", beamRead);
   while (beamRead > BEAM_BROKEN) {
     beamRead = analogRead(PHOTO_RES_PIN);
@@ -404,6 +424,39 @@ void showCandySelection() {
 void resetCursor() {
   OLED.setCursor(0, 0);
 }
+
+void showFourDig(int keypress) {
+  switch (keypress) {
+    case 0:
+      fourDigDisplay.display(0, firstDig);
+      fourDigDisplay.display(1, secondDig);
+      fourDigDisplay.display(2, thirdDig);
+      fourDigDisplay.display(3,
+                             enteredCode[0] == 0x00
+                             ? forthDig
+                             : enteredCode[0]);
+      break;
+    case 1:
+      fourDigDisplay.display(0, firstDig);
+      fourDigDisplay.display(1, secondDig);
+      fourDigDisplay.display(2, enteredCode[0]);
+      fourDigDisplay.display(3, enteredCode[1]);
+      break;
+    case 2:
+      fourDigDisplay.display(0, firstDig);
+      fourDigDisplay.display(1, enteredCode[0]);
+      fourDigDisplay.display(2, enteredCode[1]);
+      fourDigDisplay.display(3, enteredCode[2]);
+      break;
+    case 3:
+      fourDigDisplay.display(0, enteredCode[0]);
+      fourDigDisplay.display(1, enteredCode[1]);
+      fourDigDisplay.display(2, enteredCode[2]);
+      fourDigDisplay.display(3, enteredCode[3]);
+      break;
+  }
+}
+
 
 void digitalClockDisplay() {
   // digital clock display of the time
