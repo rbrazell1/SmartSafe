@@ -1,4 +1,4 @@
-
+#include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -14,6 +14,7 @@
 #include <Stepper.h>
 #include <Hue.h>
 #include <TM1637.h>
+#include <HCSR04.h>
 
 //PINS
 const int SERVO_TRAP_DOOR_PIN = 23;
@@ -27,19 +28,23 @@ const int STEPPER_THREE_PIN = 16;
 const int STEPPER_TWO_PIN = 15;
 const int STEPPER_ONE_PIN = 14;
 const int LASER_PIN = 0;
-const String PHOTO_RES_PIN = "A14";
+const int PHOTO_RES_PIN = A14;
 
 const int SCREEN_WIDTH = 128;
 const int SCREEN_HEIGHT = 64;
 const int OLED_RESET = 4;
 const int SCREEN_ADDRESS = 0x3C;
 const int SAT = 220;
-const int UNLOCKED = 0;
-const int LOCKED = 180;
+const int UNLOCKED = 160;
+const int LOCKED = 0;
+const int OPEN_TRAP = 100;
+const int CLOSE_TRAP = 0;
 const int STEPS_PER_REV = 2048;
 const int STEPPER_SPEED = 5;
 const int TOTAL_SLOTS = 7;
-const int BEAM_BROKEN = 400;
+const int BEAM_BROKEN = 210;
+const int CODE_LENGTH = 2;
+const int DETECT_DIST = 40;
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -65,17 +70,16 @@ int brightnessLevel;
 int candySlot;
 int mappedCandySlot;
 int beamRead;
+int distance;
 
-float distance;
-float echoTime;
-float calculatedDistance;
+unsigned long echoTime;
 
 char customKey;
 char candySelection;
 char bulbSelect;
 
-char defaultCode[] = {'1', '1', '1', '1'};
-char enteredCode[4];
+char defaultCode[] = {'1', '1'};
+char enteredCode[CODE_LENGTH - 1];
 char hexaKeys[ROWS][COLS] = {
   {'1', '2', '3', 'A'},
   {'4', '5', '6', 'B'},
@@ -101,7 +105,6 @@ PWMServo trapDoorServo;
 PWMServo vaultDoorServo;
 Keypad
 customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
-
 EthernetClient client;
 Wemo wemo;
 Stepper candyStepper(STEPS_PER_REV,
@@ -110,47 +113,59 @@ Stepper candyStepper(STEPS_PER_REV,
                      STEPPER_THREE_PIN,
                      STEPPER_FOUR_PIN);
 TM1637 fourDigDisplay(IC_CLK_PIN, IC_DIO_PIN);
+HCSR04 ultraSonic(TRIG_PIN, ECHO_PIN);
 
 void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+  Serial.println("step1");
   setUpOLED();
-  setUpUSSensor();
+  Serial.println("step2");
+  //  setUpUSSensor();
+  Serial.println("step3");
   setUpKeypad();
+  Serial.println("step4");
   setUpFourDigDisplay();
+  Serial.println("step5");
 }
 
 void loop() {
-  checkKeypad();
   if (isDetect()) {
     welcome();
+    Serial.println("step1A");
   } else {
+    checkKeypad();
+    Serial.println("step2A");
     OLEDLoop();
   }
 }
 
 void setUpOLED() {
-  Serial.begin(11520);
+  Wire.begin();
+  OLED.begin();
   if (!OLED.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
   }
   setSyncProvider(getTeensy3Time);
   OLED.clearDisplay();
-  Wire.begin();
+  OLED.display();
   OLED.setTextSize(1);
   OLED.setTextColor(SSD1306_WHITE);
-  OLED.setRotation(0);
+  OLED.setRotation(2);
   resetCursor();
 }
-
-void setUpUSSensor() {
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-}
+//
+//void setUpUSSensor() {
+//  pinMode(TRIG_PIN, OUTPUT);
+//  pinMode(ECHO_PIN, INPUT);
+//}
 
 void setUpKeypad() {
   OLED.printf("Serial Com established...\n");
   OLED.display();
   EthernetStatus = Ethernet.begin(mac);
   if (!EthernetStatus) {
+    OLED.clearDisplay();
     OLED.printf("failed to configure Ethernet using DHCP \n");
     OLED.display();
   }
@@ -163,11 +178,14 @@ void setUpKeypad() {
   digitalWrite(10, HIGH);
   digitalWrite(4, HIGH);
   outlet = 0;
+  OLED.clearDisplay();
+  OLED.display();
+  resetCursor();
 }
 
 void setUpFourDigDisplay() {
   fourDigDisplay.init();
-  fourDigDisplay.set(BRIGHT_TYPICAL);
+  fourDigDisplay.set(3);
 }
 
 void checkKeypad() {
@@ -176,33 +194,38 @@ void checkKeypad() {
   thirdDig = random(0, 9);
   forthDig = random(0, 9);
   customKey = customKeypad.getKey();
-  if (customKey) {
-    if (customKey == '*') {
-      while (!bulbSelect) {
-        bulbSelect = customKeypad.getKey();
-      }
-      selectBulb(bulbSelect);
-    } else {
-      enterCode();
-      if (codeIndex == 4) {
-        checkCode();
-      }
+  Serial.printf("testBEFORE\n");
+  while (!customKey) {
+    customKey = customKeypad.getKey(); //TODO add in set to green
+  }
+  lightLaser();
+  if (customKey == '*') {
+    while (!bulbSelect) {
+      bulbSelect = customKeypad.getKey();
+    }
+    selectBulb(bulbSelect);
+    bulbSelect = 0x00;
+  } else {
+    enterCode();
+    if (codeIndex == CODE_LENGTH) {
+      checkCode();
     }
   }
 }
 
 void welcome() {
   OLED.clearDisplay();
-  OLED.printf(
-    "Welcome to the SmartSafe\nEnter your code\nOr\nSet the lights with *\n&\nA - D");
   OLED.display();
-  setToGreen(3);
+  OLED.printf(
+    "Welcome to the SmartSafe\nEnter your code\nOr\nSet the lights with *\n&\nA - D\n");
+  OLED.display();
+  setToGreen(4);
   lightLaser();
   wemo.turnOn(0); // Light to see the candy better
+  checkKeypad();
 }
 
 void OLEDLoop() {
-  OLEDtimer.startTimer(1000);
   if (Serial.available()) {
     time_t t = processSyncMessage();
     if (t != 0) {
@@ -210,8 +233,8 @@ void OLEDLoop() {
       setTime(t);
     }
   }
-  while (!OLEDtimer.isTimerReady());
   OLED.clearDisplay();
+  OLED.display();
   currentHour = hour();
   currentMin = minute();
   currentDay = day();
@@ -219,30 +242,28 @@ void OLEDLoop() {
   currentYear = year();
   resetCursor();
   digitalClockDisplay();
+  Serial.println("in OLED loop");
 }
 
 void setToGreen(int bulbCount) {
-  for (int i = 0; i < bulbCount; i++) {
+  for (int i = 0; i <= bulbCount; i++) {
     brightnessLevel = (int) 127 * sin(2 * PI * .1 * now()) + 127;
     setHue(i, true, HueGreen, brightnessLevel, SAT);
   }
 }
 
 void lightLaser() {
+  pinMode(LASER_PIN, OUTPUT);
   digitalWrite(LASER_PIN, HIGH);
 }
 
-float getDistance() {
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  echoTime = pulseIn(ECHO_PIN, HIGH, 250L);
-  return calculatedDistance = (echoTime / 148.0);
+int getDistance() {
+  return distance = ultraSonic.dist();
 }
 
 bool isDetect() {
   detected = false;
-  if (getDistance() != 0) { // TODO set to 3 feet
+  if (getDistance() <= DETECT_DIST) {
     detected = true;
   }
   return detected;
@@ -267,7 +288,10 @@ void selectBulb(char bulb) {
 
 void enterCode() {
   enteredCode[codeIndex] = customKey;
-  codeIndex < 4 ? codeIndex++ : codeIndex = 3;
+  if (codeIndex < CODE_LENGTH) {
+    codeIndex++;
+  }
+  Serial.printf("testCODEINDEX: %i\n", codeIndex);
 }
 
 void checkCode() {
@@ -278,7 +302,7 @@ void checkCode() {
     : digitsCorrect = 0;
   }
   codeIndex = 0;
-  if (digitsCorrect >= 4) {
+  if (digitsCorrect == CODE_LENGTH - 1) {
     openDoor();
   } else {
     setHue(attempt, true, HueRed, 210, 220);
@@ -288,17 +312,20 @@ void checkCode() {
 }
 
 void openDoor() {
+  lock = false;
   if (lock == true) {
     locking();
+    Serial.println("locking");
   } else {
     unlocking();
+    Serial.println("unlocking");
   }
-  lock = !lock;
+  Serial.printf("Lock = %i\n", lock);
   digitsCorrect = 0;
 }
 
 void locking() {
-  trapDoorServo.write(LOCKED);
+  trapDoorServo.write(CLOSE_TRAP);
   vaultDoorServo.write(LOCKED);
 }
 
@@ -306,14 +333,16 @@ void unlocking() {
   vaultDoorServo.write(UNLOCKED);
   pickCandy();
   checkBeam();
-  trapDoorServo.write(UNLOCKED);
+  trapDoorServo.write(OPEN_TRAP);
   trapDoorTimer.startTimer(550);
+  Serial.println("Waiting to close");
   while (!trapDoorTimer.isTimerReady());
   locking();
 }
 
 void pickCandy() {
   OLED.clearDisplay();
+  OLED.display();
   OLED.setTextSize(2);
   OLED.printf("Pick Your\nCandy");
   OLED.display();
@@ -322,7 +351,9 @@ void pickCandy() {
 
 void rotateCandy() {
   candySelection = customKeypad.getKey();
-  while (!candySelection);
+  while (!candySelection) {
+    candySelection = customKeypad.getKey();
+  }
   candyStepper.setSpeed(STEPPER_SPEED);
   switch (candySelection) {
     case '1':
@@ -355,12 +386,15 @@ void rotateCandy() {
 }
 
 void checkBeam() {
-  beamRead = analogRead(PHOTO_RES_PIN);
-  while (beamRead > BEAM_BROKEN);
+  Serial.printf("BEAM READ: %i\n", beamRead);
+  while (beamRead > BEAM_BROKEN) {
+    beamRead = analogRead(PHOTO_RES_PIN);
+  }
 }
 
 void showCandySelection() {
   OLED.clearDisplay();
+  OLED.display();
   OLED.setTextSize(4);
   OLED.print(candySlot);
   OLED.display();
@@ -373,6 +407,7 @@ void resetCursor() {
 
 void digitalClockDisplay() {
   // digital clock display of the time
+  OLED.setTextSize(2);
   OLED.printf("%02i:%02i\n%02i-%02i-%04i\n",
               currentHour, currentMin, currentMnth, currentDay, currentYear);
   OLED.display();
