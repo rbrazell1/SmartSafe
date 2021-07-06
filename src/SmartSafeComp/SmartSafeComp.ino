@@ -103,6 +103,15 @@ bool EthernetStatus;
 bool isLocked;
 bool lock;
 bool welcomed;
+bool power1;
+bool power2;
+bool power3;
+bool power4;
+bool power5;
+bool switch1;
+bool switch2;
+bool switch3;
+bool switch4;
 
 Adafruit_SSD1306 OLED(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 IOTTimer OLEDtimer;
@@ -123,7 +132,7 @@ HCSR04 ultraSonic(TRIG_PIN, ECHO_PIN);
 
 void setup() {
   Serial.begin(115200);
-//  while (!Serial);
+  //  while (!Serial);
   setUpOLED();
   setUpKeypad();
   setUpFourDigDisplay();
@@ -271,22 +280,27 @@ bool isDetect() {
   return detected;
 }
 
-void selectBulb(char bulb) {
-  switch (bulb) {
+void selectBulb(char _bulb) {
+  switch (_bulb) {
     case 'A':
-      setHue(1, false, 0, 0, 0);
+      setHue(1, power1, 0, 0, 0);
+      power1 = !power1;
       break;
     case 'B':
-      setHue(2, false, 0, 0, 0);
+      setHue(2, power2, 0, 0, 0);
+      power2 = !power2;
       break;
     case 'C':
-      setHue(3, false, 0, 0, 0);
+      setHue(3, power3, 0, 0, 0);
+      power3 = !power3;
       break;
     case 'D':
-      setHue(4, false, 0, 0, 0);
+      setHue(4, power4, 0, 0, 0);
+      power4 = !power4;
       break;
     case '0':
-      setHue(5, false, 0, 0, 0);
+      setHue(5, power5, 0, 0, 0);
+      power5 = !power5;
       break;
   }
 }
@@ -294,16 +308,28 @@ void selectBulb(char bulb) {
 void selectWemo(char _wemo) {
   switch (_wemo) {
     case 'A':
-      wemo.turnOn(0);
+      switch1 = !switch1;
+      switch1
+      ? wemo.turnOn(0)
+      : wemo.turnOff(0);
       break;
     case 'B':
-      wemo.turnOn(1);
+      switch2 = !switch2;
+      switch2
+      ? wemo.turnOn(1)
+      : wemo.turnOff(1);
       break;
     case 'C':
-      wemo.turnOn(2);
+      switch3 = !switch3;
+      switch3
+      ? wemo.turnOn(2)
+      : wemo.turnOff(2);
       break;
     case 'D':
-      wemo.turnOn(3);
+      switch4 = !switch4;
+      switch4
+      ? wemo.turnOn(3)
+      : wemo.turnOff(3);
       break;
   }
 }
