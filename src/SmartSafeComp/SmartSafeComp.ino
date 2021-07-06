@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Adafruit_MPU6050.h>
+//#include <Adafruit_MPU6050.h>
 #include <TimeLib.h>
 #include <math.h>
 #include <PWMServo.h>
@@ -34,6 +34,7 @@ const int SCREEN_WIDTH = 128;
 const int SCREEN_HEIGHT = 64;
 const int OLED_RESET = 4;
 const int SCREEN_ADDRESS = 0x3C;
+const int MPU_ADDR = 0x68;
 const int SAT = 220;
 const int UNLOCKED = 160;
 const int LOCKED = 0;
@@ -46,6 +47,7 @@ const int BEAM_BROKEN = 210;
 const int CODE_LENGTH = 4;
 const int DETECT_DIST = 40;
 const int HUE_COUNT = 5;
+
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -75,6 +77,8 @@ int currentSlot;
 int finalSlot;
 int beamRead;
 int distance;
+int yShake;
+int zShake;
 
 unsigned long echoTime;
 
@@ -91,6 +95,7 @@ char hexaKeys[ROWS][COLS] = {
   {'7', '8', '9', 'C'},
   {'*', '0', '#', 'D'}
 };
+char tmp_str[7];
 
 byte i;
 byte count;
@@ -113,9 +118,13 @@ bool switch2;
 bool switch3;
 bool switch4;
 
+int16_t accelerometer_y;
+int16_t accelerometer_z;
+
 Adafruit_SSD1306 OLED(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 IOTTimer OLEDtimer;
 IOTTimer trapDoorTimer;
+IOTTimer shakeTimer;
 PWMServo trapDoorServo;
 PWMServo vaultDoorServo;
 Keypad
@@ -136,6 +145,7 @@ void setup() {
   setUpOLED();
   setUpKeypad();
   setUpFourDigDisplay();
+  setUpAccel();
   Serial.println("Setup complete");
 }
 
@@ -156,6 +166,7 @@ void setUpOLED() {
   if (!OLED.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
   }
+
   setSyncProvider(getTeensy3Time);
   OLED.clearDisplay();
   OLED.display();
@@ -195,6 +206,14 @@ void setUpFourDigDisplay() {
   fourDigDisplay.set(3);
 }
 
+void setUpAccel() {
+  Wire.begin();
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x6B);
+  Wire.write(0);
+  Wire.endTransmission(true);
+}
+
 void checkKeypad() {
   firstDig = random(0, 9);
   secondDig = random(0, 9);
@@ -203,17 +222,20 @@ void checkKeypad() {
   Serial.printf("testBEFORE\n");
   customKey = customKeypad.getKey();
   while (!customKey) {
-    customKey = customKeypad.getKey(); //TODO add in set to green
+    customKey = customKeypad.getKey(); 
+//    checkShake();
   }
   if (customKey == '*') {
     while (!bulbSelect) {
       bulbSelect = customKeypad.getKey();
+//      checkShake();
     }
     selectBulb(bulbSelect);
     bulbSelect = 0x00;
   } if (customKey == '#') {
     while (!wemoSelect) {
       wemoSelect = customKeypad.getKey();
+//      checkShake();
     }
     selectWemo(wemoSelect);
     wemoSelect = 0x00;
@@ -259,6 +281,14 @@ void setToGreen(int bulbCount) {
   for (int i = 0; i <= bulbCount; i++) {
     brightnessLevel = (int) 127 * sin(2 * PI * .1 * now()) + 127;
     setHue(i, true, HueGreen, brightnessLevel, SAT);
+  }
+  attempt = 1;
+}
+
+void setToRed(int bulbCount) {
+  for (int i = 0; i <= bulbCount; i++) {
+    brightnessLevel = (int) 127 * sin(2 * PI * .1 * now()) + 127;
+    setHue(i, true, HueRed, brightnessLevel, SAT);
   }
   attempt = 1;
 }
@@ -483,6 +513,41 @@ void showFourDig(int keypress) {
   }
 }
 
+char* convert_int16_to_str(int16_t i) {
+  sprintf(tmp_str, "%6d", i);
+  return tmp_str;
+}
+
+void accelRead() {
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU_ADDR, 7 * 2, true); // request a total of 7*2=14 registers
+
+  // "Wire.read()<<8 | Wire.read();" means two registers are read and stored in the same variable
+  accelerometer_y = Wire.read() << 8 | Wire.read(); // reading registers: 0x3D (ACCEL_YOUT_H) and 0x3E (ACCEL_YOUT_L)
+  accelerometer_z = Wire.read() << 8 | Wire.read(); // reading registers: 0x3F (ACCEL_ZOUT_H) and 0x40 (ACCEL_ZOUT_L)
+
+  // print out data
+  Serial.print("|aY= "); Serial.print(convert_int16_to_str(accelerometer_y));
+  Serial.print(" |aZ="); Serial.print(convert_int16_to_str(accelerometer_z));
+}
+
+void checkShake() {
+  accelRead();
+  yShake = (int)convert_int16_to_str(accelerometer_y); // TODO find a string to int to set correctly
+  zShake = (int)convert_int16_to_str(accelerometer_z);
+  Serial.printf("Y shake: %i\nZ shake: %i\n", yShake, zShake);
+  if (yShake > 3000 || yShake < -3000 || zShake > 3000 || zShake < -3000) {
+    for (int j = 0; j < 4; j++) {
+      setToRed(HUE_COUNT);
+      shakeTimer.startTimer(500);
+      while (!shakeTimer.isTimerReady());
+      wemo.turnOff(j);
+      setToGreen(HUE_COUNT);
+    }
+  }
+}
 
 void digitalClockDisplay() {
   // digital clock display of the time
