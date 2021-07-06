@@ -172,7 +172,7 @@ void setUpOLED() {
   OLED.display();
   OLED.setTextSize(1);
   OLED.setTextColor(SSD1306_WHITE);
-  OLED.setRotation(2);
+  OLED.setRotation(0);
   resetCursor();
   welcomed = false;
 }
@@ -222,20 +222,20 @@ void checkKeypad() {
   Serial.printf("testBEFORE\n");
   customKey = customKeypad.getKey();
   while (!customKey) {
-    customKey = customKeypad.getKey(); 
-//    checkShake();
+    customKey = customKeypad.getKey();
+    //    checkShake();
   }
   if (customKey == '*') {
     while (!bulbSelect) {
       bulbSelect = customKeypad.getKey();
-//      checkShake();
+      //      checkShake();
     }
     selectBulb(bulbSelect);
     bulbSelect = 0x00;
   } if (customKey == '#') {
     while (!wemoSelect) {
       wemoSelect = customKeypad.getKey();
-//      checkShake();
+      //      checkShake();
     }
     selectWemo(wemoSelect);
     wemoSelect = 0x00;
